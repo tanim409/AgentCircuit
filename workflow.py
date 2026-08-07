@@ -480,7 +480,7 @@ def generate_place_image(state: State) -> dict:
     blogs_dir.mkdir(parents=True, exist_ok=True)
     out_md_path = blogs_dir / md_filename
 
-    # If no images requested, just write merged markdown
+    
     if not image_specs:
         out_md_path.write_text(md, encoding="utf-8")
         return {"final": md}
@@ -493,14 +493,14 @@ def generate_place_image(state: State) -> dict:
         img_filename = spec["filename"]
         out_path = images_dir / img_filename
 
-        # generate only if needed
+       
         if not out_path.exists():
             try:
                 img_bytes = _flux_generate_image_bytes(spec["prompt"])
                 out_path.write_bytes(img_bytes)
             except Exception as e:
                 print(f"Error generating image '{img_filename}': {e}")
-                # graceful fallback: keep doc usable
+              
                 prompt_block = (
                     f"> **[IMAGE GENERATION FAILED]** {spec.get('caption', '')}\n>\n"
                     f"> **Alt:** {spec.get('alt', '')}\n>\n"
