@@ -100,18 +100,5 @@ class SectionOutput(BaseModel):
 class circuitBacker(Exception):
     pass
 
-# model = HuggingFaceEndpoint(
-#     repo_id="Qwen/Qwen2.5-7B-Instruct",
-#     task="text-generation",
-#     max_new_tokens=512,
-#     do_sample=False,
-#     provider="auto",  # lets HF pick a serving provider
-# )
-#llm = ChatHuggingFace(llm=model)
-#
-# llm = ChatOpenAI(
-#     model="qwen/qwen-2.5-7b-instruct",  # OpenRouter model slug
-#     base_url="https://openrouter.ai/api/v1",
-#     api_key=os.getenv("OPENROUTER_API_KEY")
-# )
+
 
