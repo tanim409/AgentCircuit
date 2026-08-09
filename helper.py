@@ -1,8 +1,11 @@
 import hashlib
 import json
 import time
+from datetime import datetime
 
 from langchain_core.messages import AIMessage, HumanMessage
+
+from Schema import State
 
 
 def invoked_structured_output(llm, schema, input_messages, max_retries):
@@ -40,3 +43,18 @@ def hash_tool_call(tool_name: str, tool_args: dict):
     }
     toolTostr = json.dumps(tool_call, sort_keys=True, default=str)
     return hashlib.sha256(toolTostr.encode("utf-8")).hexdigest()
+
+def log_breaker_trip(reason:str,state:State,extra:dict = None):
+    combined = {**state, **(extra or {})}
+    detail = {
+        "timestamp": datetime.now().isoformat(),
+        "reason": reason,
+        "topic": combined.get("topic"),
+        "queries": combined.get("queries"),
+        "repeats": combined.get("consecutive_repeats"),
+        "stagnant_steps": combined.get("stagnant_steps"),
+        "cost_history": combined.get("cost_history"),
+        "progress_history": combined.get("progress_history"),
+    }
+    with open("log_breaker.log.json", "a",encoding="utf-8") as log_file:
+        log_file.write(json.dumps(detail) + "\n")

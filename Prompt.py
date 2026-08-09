@@ -28,6 +28,8 @@ ORCH_SYSTEM = """
             "- Include one section for common mistakes and how to avoid them.\n"
             "- End with a practical summary/checklist and next steps.\n\n"
             "Output must strictly match the Plan schema."
+            "If research_status is velocity_exceeded or loop_detected, do NOT request further research. 
+            Create the blog plan strictly using the existing collected evidence"
 
 """
 

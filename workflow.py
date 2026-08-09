@@ -20,15 +20,15 @@ from Prompt import *
 from langgraph.checkpoint.memory import MemorySaver
 
 in_memory = MemorySaver()
-from helper import invoked_structured_output, hash_tool_call
+from helper import invoked_structured_output, hash_tool_call, log_breaker_trip
 
 load_dotenv()
 
 llm = ChatOpenAI(
-    model="qwen/qwen-2.5-7b-instruct",
+    model="meta-llama/llama-3.3-70b-instruct",
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY"),
-    max_tokens=4096
+    max_tokens=8192
 )
 embeddings = HuggingFaceEmbeddings(model_name="Qwen/Qwen3-Embedding-0.6B")
 
@@ -39,11 +39,20 @@ def router(state: State):
     print("In Router")
     topic = state['topic']
     as_of = state['as_of']
+    research_status = state.get('research_status', 'ok')
+    correction_note = ""
+
+    if research_status in ("loop_warning", "loop_warning_final"):
+        correction_note = (
+            "\n\nIMPORTANT: Previous search queries were too repetitive and made no progress. "
+            "Generate DIFFERENT, more specific queries this time."
+        )
+
     decision = invoked_structured_output(
         llm, RouterDecision,
         [
             SystemMessage(content=ROUTE_SYSTEM),
-            HumanMessage(content=f"Topic: {topic} \n as_of : {as_of}")
+            HumanMessage(content=f"Topic: {topic} \n as_of : {as_of}{correction_note}")
         ],
         max_retries=3
     )
@@ -65,6 +74,8 @@ def router(state: State):
 
 def route_next(state: State):
     print("In route_next")
+    status = state.get("research_status", "ok")
+    breaker_state = state.get("breaker_state", "closed")
     if state['need_research']:
         return "research"
     else:
@@ -86,6 +97,19 @@ def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
+def research_router(state: State):
+    print("In research_route")
+    status = state.get("research_status", "ok")
+    breaker_state = state.get("breaker_state", "closed")
+    if status in ("loop_warning", "loop_warning_final") and breaker_state != "closed":
+        return "router"
+    return "orchestrator"
+
+
+ESTIMATED_COST_PER_QUERY = 0.008
+ESTIMATED_COST_PER_LLM_CALL = 0.01
+
+
 def research(state: State):
     print("In research")
     queries = state.get('queries', [])[:10]
@@ -101,9 +125,10 @@ def research(state: State):
     else:
         query_text = str(queries)
 
-    current_vector = embeddings.embed_query(query_text)
+    current_vector = embeddings.embed_query(query_text) if query_text.strip() else None
     current_hash = hash_tool_call("tavily_search", {"queries": queries})
     history = state.get('tool_call_history', [])
+    cost_history = state.get("cost_history", [])
 
     is_duplicate = False
     if history:
@@ -111,7 +136,7 @@ def research(state: State):
         last_vector = last_entry.get("embedding")
         if current_hash == last_entry.get("hash"):
             is_duplicate = True
-        elif last_vector is not None:
+        elif last_vector is not None and current_vector is not None:
             similarity = _cosine_similarity(current_vector, last_vector)
             if similarity > 0.85:
                 is_duplicate = True
@@ -121,20 +146,17 @@ def research(state: State):
     else:
         repeats = 1
 
-
-    update_history = history + [{"tool": "tavily_search", "hash": current_hash,"embedding": current_vector}]
+    update_history = history + [{"tool": "tavily_search", "hash": current_hash, "embedding": current_vector}]
 
     tracking_update = {
         "consecutive_repeats": repeats,
         "tool_call_history": update_history
     }
 
-    if repeats >= 3:
-        return {
-            "evidence": state.get("evidence", []),
-            "research_status": "loop_detected",
-            **tracking_update
-        }
+    # if repeats >= 3:
+    #     raise circuitBacker(
+    #         f"Loop detected: research() called {repeats}x in a row with identical/near-identical queries."
+    #     )
 
     existing_evidence = state.get("evidence", [])
     max_result = 5
@@ -147,13 +169,23 @@ def research(state: State):
             stagnation_update = {
                 "progress_history": progress_history + [len(existing_evidence)],
                 "stagnant_steps": stagnant_steps,
+                "cost_history": cost_history + [0.0],
             }
+            if stagnant_steps >= 3:
+                log_breaker_trip(f"Stagnation: {stagnant_steps} steps with no queries.",
+                                 state,
+                                 extra={**stagnation_update, **tracking_update})
+                raise circuitBacker(f"Stagnation: {stagnant_steps} steps with no queries and no progress.")
             return {
                 'evidence': existing_evidence,
                 'research_status': 'no_results',
                 **tracking_update,
                 **stagnation_update
             }
+
+        turn_cost = len(queries) * ESTIMATED_COST_PER_QUERY + ESTIMATED_COST_PER_LLM_CALL
+        new_cost = cost_history + [turn_cost]
+
         for query in queries:
             if isinstance(query, str):
                 raw_result.extend(tavily_search(query, max_result))
@@ -167,14 +199,18 @@ def research(state: State):
             stagnation_update = {
                 "progress_history": progress_history + [len(existing_evidence)],
                 "stagnant_steps": stagnant_steps,
+                "cost_history": new_cost,
             }
+            if stagnant_steps >= 3:
+                log_breaker_trip(f"Stagnation: {stagnant_steps} steps with zero search results.", state,
+                                 extra={**stagnation_update, **tracking_update})
+                raise circuitBacker(f"Stagnation: {stagnant_steps} steps with zero search results.")
             return {
-                'evidence':existing_evidence,
+                'evidence': existing_evidence,
                 'research_status': 'no_results',
                 **tracking_update,
                 **stagnation_update
             }
-
 
         seen_urls = set()
         deduped_raw_result: List[dict] = []
@@ -228,20 +264,79 @@ def research(state: State):
                 stagnant_steps = 0
 
         stagnation_update = {
-           "progress_history": progress_history + [current_progress_marker],
-           "stagnant_steps": stagnant_steps,
-       }
+            "progress_history": progress_history + [current_progress_marker],
+            "stagnant_steps": stagnant_steps,
+            "cost_history": new_cost,
+        }
 
-        if stagnant_steps >= 3:
-            return {
-                "evidence": state.get("evidence", []),
-                "research_status": "loop_detected",
-                **stagnation_update,
-                **tracking_update
-            }
+        window_size = 3
+        if len(new_cost) >= window_size:
+            recent_cost = sum(new_cost[-window_size:])
+            recent_progress = (
+                    (progress_history + [current_progress_marker])[-1] -
+                    (progress_history + [current_progress_marker])[-window_size]
+            )
+            if recent_progress <= 0 and recent_cost > 0.02:
+                log_breaker_trip(
+                    f"Cost velocity: ${recent_cost:.4f} spent over last {window_size} steps with zero progress.",
+                    state,
+                    extra={**stagnation_update, **tracking_update}
+                )
+                raise circuitBacker(
+                    f"Cost velocity: ${recent_cost:.4f} spent over last {window_size} steps with zero progress."
+                )
+
+            cost_per_unit = recent_cost / max(recent_progress, 1)
+            if cost_per_unit > 0.05:
+                log_breaker_trip(
+                    f"Cost velocity: ${recent_cost:.4f} spent over last {window_size} steps with zero progress.",
+                    state,
+                    extra={**stagnation_update, **tracking_update}
+                )
+                raise circuitBacker(
+                    f"Cost efficiency: ${cost_per_unit:.4f} per progress unit exceeds baseline."
+                )
+
+        breaker_state = state.get("breaker_state", "closed")
+
+        if repeats >= 3 or stagnant_steps >= 3:
+            if breaker_state == "closed":
+                log_breaker_trip("breaker state opened",
+                                 state,
+                                 extra={**stagnation_update, **tracking_update}
+                                 )
+                return {
+                    "breaker_state": "open",
+                    "research_status": "loop_warning",
+                    "queries": [],
+                    **stagnation_update,
+                    **tracking_update
+                }
+            elif breaker_state == "open":
+                log_breaker_trip("breaker state closed",
+                                 state,
+                                 extra={**stagnation_update, **tracking_update}
+                                 )
+                return {
+                    "breaker_state": "half_open",
+                    "research_status": "loop_warning_final",
+                    **tracking_update,
+                    **stagnation_update
+                }
+            else:
+                log_breaker_trip("Loop persisted after correction attempts.",
+                                 state,
+                                 extra={**stagnation_update, **tracking_update}
+                                 )
+                raise circuitBacker("Loop persisted after correction attempts.")
 
         if not evidences:
+            log_breaker_trip("No Evidence.",
+                             state,
+                             extra={**stagnation_update, **tracking_update}
+                             )
             return {
+                "breaker_state": "closed",
                 'evidence': state.get("evidence", []),
                 'research_status': 'no_results',
                 **stagnation_update,
@@ -250,17 +345,23 @@ def research(state: State):
 
         print("Exit research")
         return {
+            "breaker_state": "closed",
             'evidence': current_evidence,
             'research_status': 'ok',
             **tracking_update,
             **stagnation_update
         }
+    except circuitBacker:
+        raise
     except Exception as e:
+        print(f"research() error: {e}")
         return {
+            "breaker_state": "closed",
             'evidence': state.get("evidence", []),
             'research_status': 'error',
             **tracking_update
         }
+
 
 def tavily_search(query: str, max_result: int = 5) -> list[dict]:
     # Initialize TavilySearch with max_results
@@ -428,24 +529,32 @@ def decide_images(state: State):
     print("In decide_images")
     merged_md = state['merged_md']
     plan = state['plan']
-    image_plan = invoked_structured_output(
-        llm, GlobalImagePlan,
-        [
-            SystemMessage(content=DECIDE_IMAGES_SYSTEM),
-            HumanMessage(content=(
-                f"Blog kind: {plan.blog_kind}\n"
-                f"Topic: {state['topic']}\n\n"
-                "Insert placeholders + propose image prompts.\n\n"
-                f"{merged_md[:3000]}"
-            ))
-        ],
-        max_retries=3
-    )
-    print("Exit decide_images")
-    return {
-        "md_with_placeholders": image_plan.md_with_placeholders,
-        "image_specs": [img.model_dump() for img in image_plan.image_specs],
-    }
+    try:
+        image_plan = invoked_structured_output(
+            llm, GlobalImagePlan,
+            [
+                SystemMessage(content=DECIDE_IMAGES_SYSTEM),
+                HumanMessage(content=(
+                    f"Blog kind: {plan.blog_kind}\n"
+                    f"Topic: {state['topic']}\n\n"
+                    "Insert placeholders + propose image prompts.\n\n"
+                    f"{merged_md[:3000]}"
+                ))
+            ],
+            max_retries=3
+        )
+        print("Exit decide_images")
+        return {
+            "md_with_placeholders": image_plan.md_with_placeholders,
+            "image_specs": [img.model_dump() for img in image_plan.image_specs],
+        }
+    except Exception as e:
+        print(f"decide_images failed: {e}")
+        return {
+            "md_with_placeholders": merged_md,
+            "image_specs": []
+        }
+
 
 
 def _flux_generate_image_bytes(prompt: str) -> bytes:
@@ -528,7 +637,10 @@ def build_graph():
     graph.add_node("reducer", reducer_subgraph())
     graph.add_edge(START, "router")
     graph.add_conditional_edges("router", route_next, {"orchestrator": "orchestrator", "research": "research"})
-    graph.add_edge("research", "orchestrator")
+    graph.add_conditional_edges("research",
+                                research_router,
+                                {"router": "router", "orchestrator": "orchestrator"}
+                                )
     graph.add_conditional_edges("orchestrator", fetch_task, ["worker"])
     graph.add_edge("worker", "reducer")
     graph.add_edge("reducer", END)
@@ -549,4 +661,4 @@ def reducer_subgraph():
     graph.add_edge("decide_images", "generate_place_image")
     graph.add_edge("generate_place_image", END)
     print("Exit reducer_subgraph.")
-    return graph
+    return graph.compile()

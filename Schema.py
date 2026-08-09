@@ -63,6 +63,8 @@ class State(TypedDict):
     cb_status: str
     progress_history: List[int]
     stagnant_steps: int
+    cost_history: List[float]
+    breaker_state:str
 
 class WorkPayload(TypedDict):
    title:str
