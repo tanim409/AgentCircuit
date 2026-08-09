@@ -1,5 +1,6 @@
 # AgentGuard
 
+
 A research-aware, agentic workflow blog-writing pipeline built with **LangGraph**,
 featuring an autonomous **circuit breaker** system that detects and stops repetitive
 agent behavior before it drains your API budget.
@@ -88,3 +89,4 @@ patterns in prompts or tool design after the fact.
   detection
 - **Image generation:** FLUX.1-schnell via Hugging Face Inference API
 - **Schema/validation:** Pydantic
+
