@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 import re
 from urllib.parse import urlparse, urlunparse
-
+from typing import Optional, List
 import numpy as np
 from huggingface_hub import InferenceClient
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -609,7 +609,6 @@ def generate_place_image(state: State) -> dict:
                 out_path.write_bytes(img_bytes)
             except Exception as e:
                 print(f"Error generating image '{img_filename}': {e}")
-              
                 prompt_block = (
                     f"> **[IMAGE GENERATION FAILED]** {spec.get('caption', '')}\n>\n"
                     f"> **Alt:** {spec.get('alt', '')}\n>\n"
