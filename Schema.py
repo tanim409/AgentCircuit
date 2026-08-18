@@ -101,7 +101,6 @@ class SectionOutput(BaseModel):
 
 class circuitBacker(Exception):
     """Exception raised when circuit breaker trips due to repeated failures or cost limits."""
-   pass
-
+    pass
 
 
