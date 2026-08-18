@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+exclude = [
+    "myenv",
+    ".venv",
+    "venv",
+    "output",
+    ".streamlit",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]  # line length handled by formatter/line-length setting above

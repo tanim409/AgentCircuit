@@ -27,7 +27,6 @@ Thumbs.db
 
 # Project specific
 output/images/
-*.md
 !output/markdown/*.md
 
 # Logs

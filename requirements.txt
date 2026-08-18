@@ -1,0 +1,13 @@
+langgraph>=1.2.11
+langchain-core>=1.5.6
+langchain-openai>=1.5.1
+langchain-google-genai>=4.3.4
+langchain-huggingface>=1.2.2
+langchain-tavily>=0.2.18
+huggingface_hub>=1.28.0
+pydantic>=2.13.4
+python-dotenv>=1.2.3
+numpy>=2.5.2
+pandas>=3.0.5
+streamlit>=1.61.1
+pytest
