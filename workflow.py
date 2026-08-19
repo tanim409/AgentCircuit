@@ -84,10 +84,22 @@ def route_next(state: State):
 def normalize_url(url: str):
     if not url:
         return ""
-    parsed = urlparse(url.lower().strip())
-    netloc = parsed.netloc.replace("www", "")
-    path = parsed.path.rstrip("/")
-    return urlunparse((parsed.scheme, netloc, path, "", "", ""))
+
+    url = url.lower()
+    if "://" in url:
+        protocol, rest = url.split("://", 1)
+    else:
+        rest = url
+
+    # Remove www. if present
+    if rest.startswith("www."):
+        rest = rest[4:]
+
+    # Remove trailing slash
+    rest = rest.rstrip("/")
+
+    # Reconstruct URL
+    return f"{protocol}://{rest}" if "://" in url else rest
 
 
 def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
@@ -308,6 +320,7 @@ def research(state: State):
                     "breaker_state": "open",
                     "research_status": "loop_warning",
                     "queries": [],
+                    "evidence": current_evidence,
                     **stagnation_update,
                     **tracking_update
                 }
@@ -319,6 +332,7 @@ def research(state: State):
                 return {
                     "breaker_state": "half_open",
                     "research_status": "loop_warning_final",
+                    "evidence": current_evidence,
                     **tracking_update,
                     **stagnation_update
                 }

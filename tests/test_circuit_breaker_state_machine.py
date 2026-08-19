@@ -56,10 +56,19 @@ def mock_external_calls(monkeypatch):
             )
         raise AssertionError(f"Unexpected schema requested in test: {schema}")
 
-    monkeypatch.setattr(workflow, "invoked_structured_output", fake_invoked_structured_output)
+    monkeypatch.setattr(workflow,
+                         "invoked_structured_output",
+                         fake_invoked_structured_output)
 
-
-    monkeypatch.setattr(workflow.embeddings, "embed_query", lambda text: [1.0, 0.0, 0.0])
+    monkeypatch.setattr(
+        workflow.embeddings,
+        "embed_query",
+        lambda text: (
+            [1.0, 0.0, 0.0]
+            if text == "query one"
+            else [0.0, 1.0, 0.0]
+        ),
+    )
 
 
 def _run(state):
