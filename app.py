@@ -15,7 +15,10 @@ from workflow import build_graph
 
 app = build_graph()
 config = {"configurable": {"thread_id": "user_session_1"}}
+logs: List[str] = []
 
+def log(msg: str):
+    logs.append(msg)
 
 def safe_slug(title: str) -> str:
     s = title.strip().lower()
@@ -561,12 +564,6 @@ if "last_out" not in st.session_state:
 tab_plan, tab_evidence, tab_preview, tab_images, tab_logs = st.tabs(
     ["🧩 Plan", "🔎 Evidence", "📝 Markdown Preview", "🖼️ Images", "🧾 Logs"]
 )
-
-logs: List[str] = []
-
-
-def log(msg: str):
-    logs.append(msg)
 
 
 out = st.session_state.get("last_out")
