@@ -17,11 +17,16 @@ from langgraph.types import Send
 from dotenv import load_dotenv
 from Prompt import ORCH_SYSTEM, RESEARCH_SYSTEM, WORKER_SYSTEM, EDITOR_SYSTEM, DECIDE_IMAGES_SYSTEM, ROUTE_SYSTEM
 from langgraph.checkpoint.memory import MemorySaver
-
+import streamlit as st
 in_memory = MemorySaver()
 from helper import invoked_structured_output, hash_tool_call, log_breaker_trip
-
 load_dotenv()
+
+
+for key in ("OPENROUTER_API_KEY", "TAVILY_API_KEY", "HF_TOKEN", "GOOGLE_API_KEY"):
+    if key not in os.environ and key in st.secrets:
+        os.environ[key] = st.secrets[key]
+
 
 llm = ChatOpenAI(
     model="meta-llama/llama-3.3-70b-instruct",
