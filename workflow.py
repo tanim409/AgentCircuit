@@ -4,7 +4,6 @@ from io import BytesIO
 from pathlib import Path
 import re
 from urllib.parse import urlparse, urlunparse
-from typing import Optional, List
 import numpy as np
 from huggingface_hub import InferenceClient
 from langchain_google_genai import ChatGoogleGenerativeAI
