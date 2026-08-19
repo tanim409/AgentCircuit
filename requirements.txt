@@ -12,3 +12,5 @@ numpy>=2.5.2
 pandas>=3.0.5
 streamlit>=1.61.1
 pytest
+torchvision>=0.19.0
+torch>=2.4.0
