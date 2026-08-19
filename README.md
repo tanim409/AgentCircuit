@@ -12,7 +12,7 @@ The project has two halves:
 - **Circuit Breaker** — a self-contained loop/cost-guard layer wired directly into the
   agent's state graph, so runaway tool-calling or LLM cost spikes get caught and stopped
   automatically instead of silently burning credits.
-
+https://likho-ai.streamlit.app/
 ---
 
 ## How it works
