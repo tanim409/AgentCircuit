@@ -179,58 +179,19 @@ def extract_title_from_md(md: str, fallback: str) -> str:
 
 st.set_page_config(page_title="LangGraph Blog Writer", layout="wide")
 
+if "dark_mode" not in st.session_state:
+    st.session_state["dark_mode"] = False
+if "submitted_topic" not in st.session_state:
+    st.session_state["submitted_topic"] = None
+if "generation_done" not in st.session_state:
+    st.session_state["generation_done"] = False
 
-st.markdown(
-    """
-    <style>
-    /* Application & Sidebar Background #171923 */
-    .stApp, 
-    [data-testid="stAppViewContainer"], 
-    [data-testid="stHeader"], 
-    [data-testid="stSidebar"], 
-    [data-testid="stSidebar"] > div {
-        background-color: #171923 !important;
-    }
-
-    /* Text elements set to White (#ffffff) */
-    html, body, .stApp, 
-    h1, h2, h3, h4, h5, h6, 
-    p, label, span, div, li, a, 
-    [data-testid="stMarkdownContainer"] p,
-    .stMarkdown {
-        color: #ffffff !important;
-    }
-
-    /* Tabs Styling */
-    button[data-baseweb="tab"] {
-        color: #cbd5e0 !important;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #63b3ed !important;
-        border-bottom-color: #63b3ed !important;
-    }
-
-    /* Input boxes & Textareas */
-    textarea, input {
-        background-color: #2d3748 !important;
-        color: #ffffff !important;
-        border-color: #4a5568 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("Blog Writing Agent")
-
+# Sidebar theme toggle & settings first so they affect layout and styling immediately
 with st.sidebar:
-    st.header("Generate New Blog")
-    topic = st.text_area(
-        "Topic",
-        height=120,
-    )
+    st.header("Settings")
+    dark_mode = st.toggle("🌙 Dark mode", value=st.session_state["dark_mode"])
+    st.session_state["dark_mode"] = dark_mode
     as_of = st.date_input("As-of date", value=date.today())
-    run_btn = st.button("🚀 Generate Blog", type="primary")
 
     st.divider()
     st.subheader("Past blogs")
@@ -258,8 +219,8 @@ with st.sidebar:
             options.append(label)
             file_by_label[label] = p
 
-        selected_label = st.radio(
-            "Select a blog to load",
+        selected_label = st.selectbox(
+            "Select a past blog to load",
             options=options,
             index=0,
             label_visibility="collapsed",
@@ -276,36 +237,269 @@ with st.sidebar:
                     "image_specs": [],
                     "final": md_text,
                 }
+                st.session_state["submitted_topic"] = extract_title_from_md(md_text, selected_md_file.stem)
+                st.session_state["generation_done"] = True
 
-                st.session_state["topic_prefill"] = extract_title_from_md(md_text, selected_md_file.stem)
+# Theme setup (dynamic CSS variables)
+if dark_mode:
+    bg_color = "#1e1e1e"
+    text_color = "#e5e5e5"
+    accent_color = "#e07a5f"
+    sidebar_bg = "#262626"
+    card_bg = "#2d2d2d"
+    border_color = "#3a3a3a"
+    input_bg = "#2d2d2d"
+    button_hover = "#f08b70"
+    tab_active = "#e07a5f"
+    tab_inactive = "#a0a0a0"
+else:
+    bg_color = "#faf9f7"
+    text_color = "#1a1a1a"
+    accent_color = "#cc5a37"
+    sidebar_bg = "#f4f3f0"
+    card_bg = "#ffffff"
+    border_color = "#e6e4e0"
+    input_bg = "#ffffff"
+    button_hover = "#b84c2a"
+    tab_active = "#cc5a37"
+    tab_inactive = "#707070"
 
+st.markdown(
+    f"""
+    <style>
+    :root {{
+        --bg-color: {bg_color};
+        --text-color: {text_color};
+        --accent-color: {accent_color};
+        --sidebar-bg: {sidebar_bg};
+        --card-bg: {card_bg};
+        --border-color: {border_color};
+        --input-bg: {input_bg};
+        --button-hover: {button_hover};
+        --tab-active: {tab_active};
+        --tab-inactive: {tab_inactive};
+    }}
 
-if "topic_prefill" in st.session_state and isinstance(st.session_state["topic_prefill"], str):
-    pass
+    /* Global backgrounds */
+    html, body, .stApp, 
+    [data-testid="stAppViewContainer"], 
+    [data-testid="stHeader"],
+    .main,
+    [data-testid="stMain"],
+    [data-testid="stAppViewBlockContainer"] {{
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+    }}
 
+    [data-testid="stSidebar"], 
+    [data-testid="stSidebar"] > div {{
+        background-color: var(--sidebar-bg) !important;
+        border-right: 1px solid var(--border-color) !important;
+    }}
 
-if "last_out" not in st.session_state:
-    st.session_state["last_out"] = None
+    /* Typography & General Colors — exclude Material Symbols icon spans */
+    html, body, .stApp, 
+    h1, h2, h3, h4, h5, h6, 
+    p, label, li, a, 
+    [data-testid="stMarkdownContainer"] p,
+    .stMarkdown {{
+        color: var(--text-color) !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }}
 
-# Layout
-tab_plan, tab_evidence, tab_preview, tab_images, tab_logs = st.tabs(
-    ["🧩 Plan", "🔎 Evidence", "📝 Markdown Preview", "🖼️ Images", "🧾 Logs"]
+    /* Apply font-family to div/span only when NOT a Material Symbols icon */
+    div:not([data-testid*="Icon"]):not([class*="e15ve43o"]),
+    span:not([data-testid*="Icon"]):not([class*="material-symbols"]):not([style*="Material Symbols"]) {{
+        color: var(--text-color) !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }}
+
+    /* Explicitly restore icon font so sidebar collapse arrow renders correctly */
+    span[data-testid*="Icon"],
+    [class*="material-symbols"],
+    button span[style*="font-family"],
+    .stIconMaterial, [class*="stIconMaterial"] {{
+        font-family: 'Material Symbols Rounded' !important;
+        font-weight: 400 !important;
+    }}
+
+    button[data-baseweb="tab"] {{
+        color: var(--tab-inactive) !important;
+        background-color: transparent !important;
+        border-bottom: 2px solid transparent !important;
+        padding: 10px 16px !important;
+        font-weight: 500 !important;
+        transition: color 0.2s ease, border-color 0.2s ease !important;
+    }}
+    button[data-baseweb="tab"]:hover {{
+        color: var(--accent-color) !important;
+    }}
+    button[data-baseweb="tab"][aria-selected="true"] {{
+        color: var(--tab-active) !important;
+        border-bottom: 2px solid var(--tab-active) !important;
+    }}
+
+    /* Inputs, Textareas styling */
+    textarea, input {{
+        background-color: var(--input-bg) !important;
+        color: var(--text-color) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+    }}
+
+    /* Chat input outer and inner redesign */
+    div[data-testid="stChatInput"] {{
+        background-color: var(--card-bg) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 24px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+        padding: 4px 12px !important;
+    }}
+    div[data-testid="stChatInput"] > div {{
+        border: none !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stChatInput"] textarea {{
+        background-color: transparent !important;
+        color: var(--text-color) !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+        font-size: 1rem !important;
+        padding: 8px 12px !important;
+    }}
+    div[data-testid="stChatInput"] textarea:focus {{
+        box-shadow: none !important;
+        border: none !important;
+        outline: none !important;
+    }}
+    div[data-testid="stChatInput"]:focus-within {{
+        border-color: var(--accent-color) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 2px rgba(204, 90, 55, 0.2) !important;
+    }}
+    /* Bottom chat bar — remove the full-width background strip.
+       Target: stBottom (the sticky wrapper), its direct div child (emotion yb component
+       with target e15ve43o3 which sets backgroundColor:bgColor), stBottomBlockContainer,
+       and stChatInputContainer. Use both class-attribute substring for emotion and data-testid. */
+    div[data-testid="stChatInputContainer"],
+    [data-testid="stBottomBlockContainer"],
+    [data-testid="stBottomBlockContainer"] > div,
+    [data-testid="stBottomBlockContainer"] > div > div,
+    [data-testid="stBottom"],
+    [data-testid="stBottom"] > div,
+    [data-testid="stBottom"] > div > div,
+    [class*="e15ve43o2"],
+    [class*="e15ve43o3"],
+    .stBottomBlockContainer,
+    div[style*="position:fixed"][style*="bottom"],
+    div[style*="position: fixed"][style*="bottom"] {{
+        background: transparent !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding-bottom: 4px !important;
+    }}
+    div[data-testid="stChatInput"] button {{
+        background-color: var(--accent-color) !important;
+        border: none !important;
+        border-radius: 50% !important;
+        color: #ffffff !important;
+        width: 32px !important;
+        height: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: background-color 0.2s ease !important;
+        padding: 0 !important;
+    }}
+    div[data-testid="stChatInput"] button:hover {{
+        background-color: var(--button-hover) !important;
+    }}
+    div[data-testid="stChatInput"] button svg {{
+        fill: #ffffff !important;
+        color: #ffffff !important;
+    }}
+
+    [data-testid="stChatMessage"] {{
+        background-color: var(--card-bg) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+        padding: 12px 16px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+    }}
+
+    div[data-testid="stExpander"], .element-container {{
+        border-radius: 8px !important;
+    }}
+    .stDataFrame {{
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+    }}
+
+    div.stButton > button {{
+        border-radius: 8px !important;
+        border: 1px solid var(--border-color) !important;
+        background-color: var(--card-bg) !important;
+        color: var(--text-color) !important;
+        padding: 8px 16px !important;
+        transition: background-color 0.2s ease, border-color 0.2s ease !important;
+    }}
+    div.stButton > button:hover {{
+        background-color: var(--sidebar-bg) !important;
+        border-color: var(--accent-color) !important;
+    }}
+
+    div.stButton > button[kind="primary"] {{
+        background-color: var(--accent-color) !important;
+        color: white !important;
+        border: none !important;
+    }}
+    div.stButton > button[kind="primary"]:hover {{
+        background-color: var(--button-hover) !important;
+    }}
+
+    hr {{
+        border: 0 !important;
+        border-top: 1px solid var(--border-color) !important;
+        margin: 1.5rem 0 !important;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-logs: List[str] = []
+st.title("Blog Writing Agent")
 
+# Show chat bubbles (user topic and assistant confirmation) above the chat input
+if st.session_state["submitted_topic"]:
+    with st.chat_message("user"):
+        st.write(st.session_state["submitted_topic"])
 
-def log(msg: str):
-    logs.append(msg)
+    if st.session_state["generation_done"]:
+        with st.chat_message("assistant"):
+            st.write("✨ Blog post generated successfully! Check the tabs below for the plan, evidence, preview, images, and logs.")
 
+# Handle chat input at the bottom
+prompt = st.chat_input("What should I write about?")
+run_generation = False
+if prompt:
+    st.session_state["submitted_topic"] = prompt
+    st.session_state["generation_done"] = False
+    st.session_state["last_out"] = None
+    run_generation = True
 
-if run_btn:
-    if not topic.strip():
+# Logic triggered by chat input
+if run_generation:
+    topic_text = st.session_state["submitted_topic"].strip()
+    if not topic_text:
         st.warning("Please enter a topic.")
         st.stop()
 
     inputs: Dict[str, Any] = {
-        "topic": topic.strip(),
+        "topic": topic_text,
         "mode": "",
         "needs_research": False,
         "queries": [],
@@ -357,6 +551,22 @@ if run_btn:
             st.session_state["last_out"] = out
             status.update(label="✅ Done", state="complete", expanded=False)
             log("[final] received final state")
+            st.session_state["generation_done"] = True
+            st.rerun()
+
+if "last_out" not in st.session_state:
+    st.session_state["last_out"] = None
+
+# Layout
+tab_plan, tab_evidence, tab_preview, tab_images, tab_logs = st.tabs(
+    ["🧩 Plan", "🔎 Evidence", "📝 Markdown Preview", "🖼️ Images", "🧾 Logs"]
+)
+
+logs: List[str] = []
+
+
+def log(msg: str):
+    logs.append(msg)
 
 
 out = st.session_state.get("last_out")
@@ -494,5 +704,13 @@ if out:
 
         st.text_area("Event log", value="\n\n".join(st.session_state["logs"][-80:]), height=520)
 else:
-    st.info("Enter a topic and click **Generate Blog**.")
+    st.markdown(
+        """
+        <div style="text-align: center; padding: 4rem 2rem; color: var(--tab-inactive);">
+            <h3 style="font-weight: 400; font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-color);">What should we write today?</h3>
+            <p style="font-size: 0.95rem; margin: 0;">Enter a topic or prompt in the input below to generate a new blog post.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
