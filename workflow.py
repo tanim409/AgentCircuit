@@ -15,7 +15,7 @@ from Schema import *
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from dotenv import load_dotenv
-from Prompt import *
+from Prompt import ORCH_SYSTEM, RESEARCH_SYSTEM, WORKER_SYSTEM, EDITOR_SYSTEM, DECIDE_IMAGES_SYSTEM, ROUTE_SYSTEM
 from langgraph.checkpoint.memory import MemorySaver
 
 in_memory = MemorySaver()
